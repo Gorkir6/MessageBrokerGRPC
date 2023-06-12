@@ -16,6 +16,8 @@ struct Topic {
     mensajes: utils::Queue<Mensaje>,
 }
 
+
+
 fn main() {
     println!("Hello, world!");
 }

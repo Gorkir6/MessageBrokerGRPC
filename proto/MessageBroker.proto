@@ -10,7 +10,7 @@ service Broker {
   rpc GetMessages(GetMessageRequest) returns(GetMessageResponse);
 }
 
-message Suscribirse{
+message SuscriptionRequest{
     string id = 1;
     string topic = 2;
 }
@@ -41,3 +41,7 @@ message GetTopicResponse{
 message GetAllTopicRequest{
   string id = 1;
 }
+
+message SuscriptionResponse{
+    bool success = 1;
+  }
