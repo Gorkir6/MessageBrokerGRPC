@@ -2,6 +2,11 @@
      items: Vec<T>,
 }
 
+impl<T> Default for Queue<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 impl<T> Queue<T> {
     pub fn new()-> Self{
          Queue{items: Vec::new()}

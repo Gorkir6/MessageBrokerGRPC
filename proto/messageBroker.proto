@@ -4,8 +4,8 @@ import "google/protobuf/empty.proto";
 
 service Broker {
   rpc Suscribe(SuscriptionRequest) returns (SuscriptionResponse);
-  rpc PostMessage(MessageRequest) returns (google.protobuf.Empty);
-  rpc GetTopic(google.protobuf.Empty ) returns (GetTopicResponse);
+  rpc PostMessage(MessageRequest) returns (MessageResponse);
+  rpc GetTopics(GetTopicRequest) returns (GetTopicResponse);
   rpc GetAllTopics(GetAllTopicRequest) returns (GetTopicResponse);
   rpc GetMessages(GetMessageRequest) returns(GetMessageResponse);
 }
@@ -22,8 +22,11 @@ message SuscriptionRequest{
 }
 
 message MessageRequest{
-    string topic = 2;
-    Message mensaje = 3;
+    string topic = 1;
+    Message mensaje = 2;
+}
+message MessageResponse{
+    bool success =1;
 }
 
 message GetMessageRequest{
@@ -31,11 +34,13 @@ message GetMessageRequest{
     string topic = 2;
 }
 
-
 message GetMessageResponse{
     repeated Message messages = 1;
 }
 
+message GetTopicRequest{
+  string id =1;    
+}
 message GetTopicResponse{
     repeated string topics = 1;
 }
