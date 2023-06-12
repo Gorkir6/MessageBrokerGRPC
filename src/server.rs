@@ -1,9 +1,6 @@
+use utils::queue;
 
-mod utils{
-    pub use crate::queue::Queue;
-}
 
-mod queue;
 
 struct Mensaje{
     id: String,

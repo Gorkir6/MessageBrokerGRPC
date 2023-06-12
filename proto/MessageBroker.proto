@@ -1,11 +1,11 @@
 syntax = "proto3";
 package messageBroker;
-
+import "google/protobuf/empty.proto";
 
 service Broker {
   rpc Suscribe(SuscriptionRequest) returns (SuscriptionResponse);
-  rpc PostMessage(MessageRequest) returns (google.protobuff.Empty);
-  rpc GetTopic(google.protobuff.Empty ) returns (GetTopicResponse);
+  rpc PostMessage(MessageRequest) returns (google.protobuf.Empty);
+  rpc GetTopic(google.protobuf.Empty ) returns (GetTopicResponse);
   rpc GetAllTopics(GetAllTopicRequest) returns (GetTopicResponse);
   rpc GetMessages(GetMessageRequest) returns(GetMessageResponse);
 }
