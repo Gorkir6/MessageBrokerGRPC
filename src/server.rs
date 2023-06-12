@@ -1,14 +1,12 @@
+#[derive(Default)]
 #[path = "utils/queue.rs"] mod queue;
 
 use queue::Queue;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc,Mutex};
 use tonic::{transport::Server, Request, Response, Status};
-use message_broker::{
-    message_broker_server::{Broker, BrokerServer},
-    SuscriptionRequest, SuscriptionResponse,MessageRequest, GetMessageRequest, GetMessageResponse, GetTopicResponse, GetAllTopicRequest,
-}
-
+use message_broker::{SuscriptionRequest, SuscriptionResponse,MessageRequest, GetMessageRequest, GetMessageResponse, GetTopicResponse, GetAllTopicRequest};
+use message_broker_server::{Broker, BrokerServer};
 
 struct Mensaje{
     id: String,
@@ -19,6 +17,16 @@ struct Topic {
     nombre: String,
     mensajes: Queue<Mensaje>,
     suscriptores: HashSet<String>,
+}
+
+impl Default for Topic{
+    fn default() -> Self{
+        Topic{
+            nombre: String::new(),
+            mensajes: Queue::new(),
+            suscriptores: HashSet::new(),
+        }
+    }
 }
 //Implementacion del server.
 //
@@ -34,13 +42,16 @@ impl MessageBroker for Broker{
         &self, 
         request: Request<GetAllTopicRequest>,
     ) -> Result<Response<GetTopicResponse>,Status>{
-        let topics: self.topics.lock().unwrap();
-        let response_topics = vec![];
+        let topics: self.topics.lock().unwrap().copy();
+        let mut response_topics = vec![];
         while(!topics.is_empty()){
-           if Some(topics.dequeue()){
-
-            } 
+           let topic = topics.dequeue().unwrap();
+           response_topics.push(topics.nombre);
         }
+        let response = GetTopicRespose{
+            topics
+        };
+        Ok(Response::new(response))
     }
 }
 
