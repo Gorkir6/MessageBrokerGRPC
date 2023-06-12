@@ -1,4 +1,3 @@
-#[derive(Default)]
 #[path = "utils/queue.rs"] mod queue;
 
 use queue::Queue;
@@ -31,20 +30,20 @@ impl Default for Topic{
 //Implementacion del server.
 //
 #[derive(Default)]
-struct Broker{
+struct BrokerTrait{
     topics: Arc<Mutex<Queue<Topic>>>,
 }
 
 #[tonic::async_trait]
-impl MessageBroker for Broker{
+impl Broker for BrokerTrait{
 
     async fn get_all_topic(
         &self, 
         request: Request<GetAllTopicRequest>,
     ) -> Result<Response<GetTopicResponse>,Status>{
-        let topics: self.topics.lock().unwrap().copy();
+        let topics = self.topics.lock().unwrap();
         let mut response_topics = vec![];
-        while(!topics.is_empty()){
+        while !topics.is_empty() {
            let topic = topics.dequeue().unwrap();
            response_topics.push(topics.nombre);
         }

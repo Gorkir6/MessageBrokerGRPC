@@ -10,6 +10,12 @@ service Broker {
   rpc GetMessages(GetMessageRequest) returns(GetMessageResponse);
 }
 
+
+message Message{
+    string id = 1;
+    string contenido = 2;
+}
+
 message SuscriptionRequest{
     string id = 1;
     string topic = 2;
@@ -25,10 +31,6 @@ message GetMessageRequest{
     string topic = 2;
 }
 
-message Message{
-    string id = 1;
-    string contenido = 2;
-}
 
 message GetMessageResponse{
     repeated Message messages = 1;
