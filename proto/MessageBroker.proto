@@ -1,0 +1,43 @@
+syntax = "proto3";
+package messageBroker;
+
+
+service Broker {
+  rpc Suscribe(SuscriptionRequest) returns (SuscriptionResponse);
+  rpc PostMessage(MessageRequest) returns (google.protobuff.Empty);
+  rpc GetTopic(google.protobuff.Empty ) returns (GetTopicResponse);
+  rpc GetAllTopics(GetAllTopicRequest) returns (GetTopicResponse);
+  rpc GetMessages(GetMessageRequest) returns(GetMessageResponse);
+}
+
+message Suscribirse{
+    string id = 1;
+    string topic = 2;
+}
+
+message MessageRequest{
+    string topic = 2;
+    Message mensaje = 3;
+}
+
+message GetMessageRequest{
+    string id = 1;
+    string topic = 2;
+}
+
+message Message{
+    string id = 1;
+    string contenido = 2;
+}
+
+message GetMessageResponse{
+    repeated Message messages = 1;
+}
+
+message GetTopicResponse{
+    repeated string topics = 1;
+}
+
+message GetAllTopicRequest{
+  string id = 1;
+}
