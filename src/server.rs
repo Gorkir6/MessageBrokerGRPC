@@ -1,5 +1,6 @@
-use utils::queue;
+#[path = "utils/queue.rs"] mod queue;
 
+use queue::Queue;
 
 
 struct Mensaje{
@@ -7,12 +8,12 @@ struct Mensaje{
     contenido: String,
 }
 
-#[derive(Debug)]
 struct Topic {
     nombre: String,
-    mensajes: utils::Queue<Mensaje>,
+    mensajes: Queue<Mensaje>,
 }
-
+//Implementacion del server.
+//
 
 
 fn main() {
