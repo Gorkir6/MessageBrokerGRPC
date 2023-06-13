@@ -8,8 +8,22 @@ service Broker {
   rpc GetTopics(GetTopicRequest) returns (GetTopicResponse);
   rpc GetAllTopics(GetAllTopicRequest) returns (GetTopicResponse);
   rpc GetMessages(GetMessageRequest) returns(GetMessageResponse);
+  rpc Register(RegisterRequest) returns(RegisterResponse); 
 }
 
+
+message User{
+    string id = 1;
+    string nombre = 2;
+}
+
+message RegisterRequest{
+    User usuario =1;
+}
+
+message RegisterResponse{
+    bool success = 1;
+}
 
 message Message{
     string id = 1;

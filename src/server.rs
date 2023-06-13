@@ -1,5 +1,6 @@
 #[path = "utils/queue.rs"] mod queue;
 
+use mBroker::User;
 use queue::Queue;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc,Mutex};
@@ -13,16 +14,16 @@ struct Mensaje{
 }
 
 struct Topic {
-    nombre: String,
-    mensajes: Queue<Mensaje>,
-    suscriptores: HashSet<String>,
+    pub nombre: String,
+    pub mensajes: Vec<Mensaje>,
+    pub suscriptores: HashSet<String>,
 }
 
 impl Default for Topic{
     fn default() -> Self{
         Topic{
             nombre: String::new(),
-            mensajes: Queue::new(),
+            mensajes: Vec::new(),
             suscriptores: HashSet::new(),
         }
     }
@@ -31,26 +32,121 @@ impl Default for Topic{
 //
 #[derive(Default)]
 struct BrokerTrait{
-    topics: Arc<Mutex<Queue<Topic>>>,
+    topics: Arc<Mutex<HashMap<String,Topic>>>,
+    users: Arc<Mutex<HashMap<String,User>>>
 }
 
 #[tonic::async_trait]
 impl mBroker::broker_server::Broker for BrokerTrait{
- 
+        
+    async fn suscribe(
+        &self,
+        request: Request<mBroker::SuscriptionRequest>,
+    )-> Result<Response<mBroker::SuscriptionResponse>, Status>{
+        let request_data = request.into_inner();
+        let (request_id, request_topic) = (request_data.id.clone(),request_data.topic.clone());
+        let mut topics = self.topics.lock().unwrap();
+        
+        if topics.contains_key(&request_topic){
+            let topic = topics.get_mut(&request_topic).unwrap();
+            let insertado = topic.suscriptores.insert(request_id.clone());
+            if insertado == false{
+                return Err(Status::already_exists("El usuario se encuentra ya suscrito al topic"));
+            }
+        }
+        
+        let response = mBroker::SuscriptionResponse{
+            success: true
+        };
+        Ok(Response::new(response))
+        
+    }
+
+    
+    async fn register(
+        &self,
+        request: Request<mBroker::RegisterRequest>,
+    ) -> Result<Response<mBroker::RegisterResponse>, Status> {
+        let usuario = match request.into_inner().usuario.clone() {
+            Some(usuario) => usuario,
+            None => return Err(Status::invalid_argument("User information is missing")),
+        };
+
+        let mut users = self.users.lock().unwrap();
+
+        if users.contains_key(&usuario.id) {
+            return Err(Status::already_exists("User already exists"));
+        }
+
+        users.insert(usuario.id.clone(),usuario);
+
+        let response = mBroker::RegisterResponse {
+            success: true,
+        };
+
+        Ok(Response::new(response))
+    }
+
+
+    async fn get_messages(
+        &self,
+        request: Request<mBroker::GetMessageRequest>
+    )-> Result<Response<mBroker::GetMessageResponse>,Status>{
+        let request_data = request.into_inner();    
+        let (request_id, request_topic) = (request_data.id, request_data.topic);
+        let mut response_messages = Vec::new();
+        for topic in self.topics.lock().unwrap().iter(){
+            if topic.nombre == request_topic{
+                for message in topic.mensajes.iter(){
+                    let response_message = mBroker::Message{
+                        id: message.id.clone(), 
+                        contenido: message.contenido.clone()
+                    };
+                    response_messages.push(response_message);
+                }
+            }
+        }
+        if response_messages.is_empty(){
+            return Err(Status::not_found("Nada que mostrar"));
+        }
+        let response = mBroker::GetMessageResponse{
+            messages: response_messages
+        };
+        Ok(Response::new(response))
+    }
     async fn get_all_topics(
         &self, 
         request: Request<mBroker::GetAllTopicRequest>,
     ) -> Result<Response<mBroker::GetTopicResponse>,Status>{
         let topics = self.topics.lock().unwrap();
         let mut response_topics = vec![];
-        while !topics.is_empty() {
-           let topic = topics.dequeue().unwrap();
-           response_topics.push(topic.nombre);
+        for topic in topics.iter(){
+            response_topics.push(topic.nombre.clone());
         }
         let response = mBroker::GetTopicResponse{
             topics: response_topics
         };
         Ok(Response::new(response))
+    }
+
+    async fn get_topics(
+        &self,
+        request: Request<mBroker::GetTopicRequest>,
+    ) -> Result<Response<mBroker::GetTopicResponse>,Status>{
+        let topics = self.topics.lock().unwrap();
+        let request_topic  = request.into_inner();
+        let user_id = request_topic.id;
+        let mut response_topics = vec![];
+        for topic in topics.iter(){
+            if topic.suscriptores.contains(&user_id){
+                response_topics.push(topic.nombre.clone());
+            }
+        }
+        let response = mBroker::GetTopicResponse{
+            topics: response_topics
+        };
+        Ok(Response::new(response))
+        
     }
 
     async fn post_message(
