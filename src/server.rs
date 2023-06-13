@@ -8,14 +8,10 @@ use tonic::{transport::Server, Request, Response, Status};
 mod mBroker{
     tonic::include_proto!("message_broker");
 }
-struct Mensaje{
-    id: String,
-    contenido: String,
-}
 
 struct Topic {
     pub nombre: String,
-    pub mensajes: Vec<Mensaje>,
+    pub mensajes: Vec<mBroker::Message>,
     pub suscriptores: HashSet<String>,
 }
 
@@ -95,25 +91,30 @@ impl mBroker::broker_server::Broker for BrokerTrait{
         let request_data = request.into_inner();    
         let (request_id, request_topic) = (request_data.id, request_data.topic);
         let mut response_messages = Vec::new();
-        for topic in self.topics.lock().unwrap().iter(){
-            if topic.nombre == request_topic{
-                for message in topic.mensajes.iter(){
-                    let response_message = mBroker::Message{
-                        id: message.id.clone(), 
-                        contenido: message.contenido.clone()
-                    };
-                    response_messages.push(response_message);
+        let topics = self.topics.lock().unwrap();
+        
+        match topics.get_mut(&request_topic) {
+            Some(topic) => {
+                if topic.suscriptores.contains(&request_id) {
+                    let response_messages = topic.mensajes.clone();
+                    // Rest of your code here
+
+                } else {
+                    let error_message = format!("El usuario {}, no se encuentra suscrito al topic",request_id.clone());
+                    return Err(Status::permission_denied(error_message));
                 }
             }
+            None => {
+                return Err(Status::not_found("No existe el topic"));
+            }
         }
-        if response_messages.is_empty(){
-            return Err(Status::not_found("Nada que mostrar"));
-        }
+
         let response = mBroker::GetMessageResponse{
             messages: response_messages
         };
         Ok(Response::new(response))
     }
+
     async fn get_all_topics(
         &self, 
         request: Request<mBroker::GetAllTopicRequest>,
