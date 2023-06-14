@@ -1,21 +1,19 @@
-use mBroker::User;
+use m_broker::User;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc,Mutex};
-use tonic::{transport::Server, Request, Response, Status};
-mod mBroker{
+use tonic::{Request, Response, Status};
+mod m_broker{
     tonic::include_proto!("message_broker");
 }
 
 struct Topic {
-    pub nombre: String,
-    pub mensajes: Vec<mBroker::Message>,
+    pub mensajes: Vec<m_broker::Message>,
     pub suscriptores: HashSet<String>,
 }
 
 impl Default for Topic{
     fn default() -> Self{
         Topic{
-            nombre: String::new(),
             mensajes: Vec::new(),
             suscriptores: HashSet::new(),
         }
@@ -30,12 +28,12 @@ struct BrokerTrait{
 }
 
 #[tonic::async_trait]
-impl mBroker::broker_server::Broker for BrokerTrait{
+impl m_broker::broker_server::Broker for BrokerTrait{
         
     async fn suscribe(
         &self,
-        request: Request<mBroker::SuscriptionRequest>,
-    )-> Result<Response<mBroker::SuscriptionResponse>, Status>{
+        request: Request<m_broker::SuscriptionRequest>,
+    )-> Result<Response<m_broker::SuscriptionResponse>, Status>{
         let request_data = request.into_inner();
         let (request_id, request_topic) = (request_data.id.clone(),request_data.topic.clone());
         let mut topics = self.topics.lock().unwrap();
@@ -48,7 +46,7 @@ impl mBroker::broker_server::Broker for BrokerTrait{
             }
         }
         
-        let response = mBroker::SuscriptionResponse{
+        let response = m_broker::SuscriptionResponse{
             success: true
         };
         Ok(Response::new(response))
@@ -58,8 +56,8 @@ impl mBroker::broker_server::Broker for BrokerTrait{
     
     async fn register(
         &self,
-        request: Request<mBroker::RegisterRequest>,
-    ) -> Result<Response<mBroker::RegisterResponse>, Status> {
+        request: Request<m_broker::RegisterRequest>,
+    ) -> Result<Response<m_broker::RegisterResponse>, Status> {
         let usuario = match request.into_inner().usuario.clone() {
             Some(usuario) => usuario,
             None => return Err(Status::invalid_argument("User information is missing")),
@@ -73,7 +71,7 @@ impl mBroker::broker_server::Broker for BrokerTrait{
 
         users.insert(usuario.id.clone(),usuario);
 
-        let response = mBroker::RegisterResponse {
+        let response = m_broker::RegisterResponse {
             success: true,
         };
 
@@ -83,8 +81,8 @@ impl mBroker::broker_server::Broker for BrokerTrait{
 
     async fn get_messages(
         &self,
-        request: Request<mBroker::GetMessageRequest>
-    )-> Result<Response<mBroker::GetMessageResponse>,Status>{
+        request: Request<m_broker::GetMessageRequest>
+    )-> Result<Response<m_broker::GetMessageResponse>,Status>{
         let request_data = request.into_inner();    
         let (request_id, request_topic) = (request_data.id, request_data.topic);
         let mut topics = self.topics.lock().unwrap();
@@ -92,7 +90,7 @@ impl mBroker::broker_server::Broker for BrokerTrait{
         match topics.get_mut(&request_topic) {
             Some(topic) => {
                 if topic.suscriptores.contains(&request_id) {
-                    let response = mBroker::GetMessageResponse{
+                    let response = m_broker::GetMessageResponse{
                         messages: topic.mensajes.clone()
                     };
                     Ok(Response::new(response))                
@@ -111,14 +109,14 @@ impl mBroker::broker_server::Broker for BrokerTrait{
 
     async fn get_all_topics(
         &self, 
-        _request: Request<mBroker::GetAllTopicRequest>,
-    ) -> Result<Response<mBroker::GetTopicResponse>,Status>{
+        _request: Request<m_broker::GetAllTopicRequest>,
+    ) -> Result<Response<m_broker::GetTopicResponse>,Status>{
         let topics = self.topics.lock().unwrap();
         let mut response_topics = vec![];
         for (topic_name, _topic) in topics.iter(){
             response_topics.push(topic_name.clone());
         }
-        let response = mBroker::GetTopicResponse{
+        let response = m_broker::GetTopicResponse{
             topics: response_topics
         };
         Ok(Response::new(response))
@@ -126,8 +124,8 @@ impl mBroker::broker_server::Broker for BrokerTrait{
 
     async fn get_topics(
         &self,
-        request: Request<mBroker::GetTopicRequest>,
-    ) -> Result<Response<mBroker::GetTopicResponse>,Status>{
+        request: Request<m_broker::GetTopicRequest>,
+    ) -> Result<Response<m_broker::GetTopicResponse>,Status>{
         let topics = self.topics.lock().unwrap();
         let request_topic  = request.into_inner();
         let user_id = request_topic.id;
@@ -137,7 +135,7 @@ impl mBroker::broker_server::Broker for BrokerTrait{
                 response_topics.push(topic_name.clone());
             }
         }
-        let response = mBroker::GetTopicResponse{
+        let response = m_broker::GetTopicResponse{
             topics: response_topics
         };
         Ok(Response::new(response))
@@ -146,8 +144,8 @@ impl mBroker::broker_server::Broker for BrokerTrait{
 
     async fn post_message(
         &self,
-        request: Request<mBroker::MessageRequest>,
-    ) -> Result<Response<mBroker::MessageResponse>,Status>{
+        request: Request<m_broker::MessageRequest>,
+    ) -> Result<Response<m_broker::MessageResponse>,Status>{
         let mut topics = self.topics.lock().unwrap();
         let request_content = request.into_inner();
         let (request_topic, request_mensaje) = (request_content.topic, request_content.mensaje.unwrap());
@@ -157,7 +155,7 @@ impl mBroker::broker_server::Broker for BrokerTrait{
                 if topic.suscriptores.contains(&request_mensaje.id){
                     //Si esta suscrito
                     topic.mensajes.push(request_mensaje);
-                    let response = mBroker::MessageResponse{
+                    let response = m_broker::MessageResponse{
                         success: true
                     };
                     Ok(Response::new(response))
@@ -183,7 +181,6 @@ async fn main() -> Result<(),Box<dyn std::error::Error>>{
             topics.insert(
                 "Pc".to_string(),
                 Topic {
-                    nombre: "Pc".to_string(),
                     mensajes: vec![],
                     suscriptores: HashSet::new(),
                 },
@@ -191,7 +188,6 @@ async fn main() -> Result<(),Box<dyn std::error::Error>>{
             topics.insert(
                 "Politics".to_string(),
                 Topic {
-                    nombre: "Politics".to_string(),
                     mensajes: vec![],
                     suscriptores: HashSet::new(),
                 },
@@ -199,7 +195,6 @@ async fn main() -> Result<(),Box<dyn std::error::Error>>{
             topics.insert(
                 "Memes".to_string(),
                 Topic {
-                    nombre: "Memes".to_string(),
                     mensajes: vec![],
                     suscriptores: HashSet::new(),
                 },
@@ -208,6 +203,6 @@ async fn main() -> Result<(),Box<dyn std::error::Error>>{
         })),
         users: Arc::new(Mutex::new(HashMap::new())),
     };
-    tonic::transport::Server::builder().add_service(mBroker::broker_server::BrokerServer::new(broker)).serve(addr).await?;
+    tonic::transport::Server::builder().add_service(m_broker::broker_server::BrokerServer::new(broker)).serve(addr).await?;
     Ok(())
 }
