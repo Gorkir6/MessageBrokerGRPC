@@ -41,11 +41,18 @@ impl m_broker::broker_server::Broker for BrokerTrait{
         if topics.contains_key(&request_topic){
             let topic = topics.get_mut(&request_topic).unwrap();
             let insertado = topic.suscriptores.insert(request_id.clone());
-            if insertado == false{
+            if !insertado{
                 return Err(Status::already_exists("El usuario se encuentra ya suscrito al topic"));
             }
+        }else{
+            println!("DEBUG: Topic not found: {}", request_topic); 
+            return Err(Status::invalid_argument("No existe el topic"));
         }
-        
+        println!("El usuario se suscribio al topic!");
+        println!("Los usuarios suscritos son: ");
+        for suscriber in topics.get(&request_topic).unwrap().suscriptores.iter(){
+            println!("{}",suscriber);
+        }
         let response = m_broker::SuscriptionResponse{
             success: true
         };
