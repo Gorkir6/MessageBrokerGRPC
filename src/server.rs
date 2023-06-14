@@ -1,7 +1,4 @@
-#[path = "utils/queue.rs"] mod queue;
-
 use mBroker::User;
-use queue::Queue;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc,Mutex};
 use tonic::{transport::Server, Request, Response, Status};
@@ -90,15 +87,15 @@ impl mBroker::broker_server::Broker for BrokerTrait{
     )-> Result<Response<mBroker::GetMessageResponse>,Status>{
         let request_data = request.into_inner();    
         let (request_id, request_topic) = (request_data.id, request_data.topic);
-        let mut response_messages = Vec::new();
-        let topics = self.topics.lock().unwrap();
+        let mut topics = self.topics.lock().unwrap();
         
         match topics.get_mut(&request_topic) {
             Some(topic) => {
                 if topic.suscriptores.contains(&request_id) {
-                    let response_messages = topic.mensajes.clone();
-                    // Rest of your code here
-
+                    let response = mBroker::GetMessageResponse{
+                        messages: topic.mensajes.clone()
+                    };
+                    Ok(Response::new(response))                
                 } else {
                     let error_message = format!("El usuario {}, no se encuentra suscrito al topic",request_id.clone());
                     return Err(Status::permission_denied(error_message));
@@ -109,20 +106,17 @@ impl mBroker::broker_server::Broker for BrokerTrait{
             }
         }
 
-        let response = mBroker::GetMessageResponse{
-            messages: response_messages
-        };
-        Ok(Response::new(response))
+        
     }
 
     async fn get_all_topics(
         &self, 
-        request: Request<mBroker::GetAllTopicRequest>,
+        _request: Request<mBroker::GetAllTopicRequest>,
     ) -> Result<Response<mBroker::GetTopicResponse>,Status>{
         let topics = self.topics.lock().unwrap();
         let mut response_topics = vec![];
-        for topic in topics.iter(){
-            response_topics.push(topic.nombre.clone());
+        for (topic_name, _topic) in topics.iter(){
+            response_topics.push(topic_name.clone());
         }
         let response = mBroker::GetTopicResponse{
             topics: response_topics
@@ -138,9 +132,9 @@ impl mBroker::broker_server::Broker for BrokerTrait{
         let request_topic  = request.into_inner();
         let user_id = request_topic.id;
         let mut response_topics = vec![];
-        for topic in topics.iter(){
+        for (topic_name,topic) in topics.iter(){
             if topic.suscriptores.contains(&user_id){
-                response_topics.push(topic.nombre.clone());
+                response_topics.push(topic_name.clone());
             }
         }
         let response = mBroker::GetTopicResponse{
@@ -154,16 +148,66 @@ impl mBroker::broker_server::Broker for BrokerTrait{
         &self,
         request: Request<mBroker::MessageRequest>,
     ) -> Result<Response<mBroker::MessageResponse>,Status>{
+        let mut topics = self.topics.lock().unwrap();
         let request_content = request.into_inner();
         let (request_topic, request_mensaje) = (request_content.topic, request_content.mensaje.unwrap());
-        let (msg_contenido, msg_id) = (request_mensaje.contenido, request_mensaje.id);
-        let response = mBroker::MessageResponse{
-            success: true
-        };
-        Ok(Response::new(response))
+        //Ver si si existe el topic y si si esta suscrito el usuario.
+        match topics.get_mut(&request_topic){
+            Some(topic)=>{
+                if topic.suscriptores.contains(&request_mensaje.id){
+                    //Si esta suscrito
+                    topic.mensajes.push(request_mensaje);
+                    let response = mBroker::MessageResponse{
+                        success: true
+                    };
+                    Ok(Response::new(response))
+                }else{
+                    return Err(Status::permission_denied("El usuario no esta suscrito al topic. Debe suscribirse para poder enviar mensajes"));
+                }
+            }
+            None => {
+                return Err(Status::not_found("El topic no existe"));
+            }
+
+        }
     }
 }
-
-fn main() {
-    println!("Hello, world!");
+#[tokio::main()]
+async fn main() -> Result<(),Box<dyn std::error::Error>>{
+    let addr = "127.0.0.1:50051".parse()?;
+    
+    println!("Server escuchando en {}", addr);
+    let broker = BrokerTrait {
+        topics: Arc::new(Mutex::new({
+            let mut topics = HashMap::new();
+            topics.insert(
+                "Pc".to_string(),
+                Topic {
+                    nombre: "Pc".to_string(),
+                    mensajes: vec![],
+                    suscriptores: HashSet::new(),
+                },
+            );
+            topics.insert(
+                "Politics".to_string(),
+                Topic {
+                    nombre: "Politics".to_string(),
+                    mensajes: vec![],
+                    suscriptores: HashSet::new(),
+                },
+            );
+            topics.insert(
+                "Memes".to_string(),
+                Topic {
+                    nombre: "Memes".to_string(),
+                    mensajes: vec![],
+                    suscriptores: HashSet::new(),
+                },
+            );
+            topics
+        })),
+        users: Arc::new(Mutex::new(HashMap::new())),
+    };
+    tonic::transport::Server::builder().add_service(mBroker::broker_server::BrokerServer::new(broker)).serve(addr).await?;
+    Ok(())
 }
