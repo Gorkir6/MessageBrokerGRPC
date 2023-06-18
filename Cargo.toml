@@ -19,7 +19,9 @@ path = "src/cliente.rs"
 tonic ="0.7"#paquete para grpc en rust-lang
 prost = "0.10"
 prost-types = "0.7"
+futures = "0.3"
 tokio ={version = "1.0", features =["macros", "rt-multi-thread"]}
+tokio-stream = "0.1"
 
 
 [build-dependencies]

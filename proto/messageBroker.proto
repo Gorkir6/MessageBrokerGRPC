@@ -7,7 +7,7 @@ service Broker {
   rpc PostMessage(MessageRequest) returns (MessageResponse);
   rpc GetTopics(GetTopicRequest) returns (GetTopicResponse);
   rpc GetAllTopics(GetAllTopicRequest) returns (GetTopicResponse);
-  rpc GetMessages(GetMessageRequest) returns(GetMessageResponse);
+  rpc GetMessages(GetMessageRequest) returns(stream Message);
   rpc Register(RegisterRequest) returns(RegisterResponse); 
 }
 
@@ -31,7 +31,7 @@ message Message{
 }
 
 message SuscriptionRequest{
-    string id = 1;
+    User user = 1;
     string topic = 2;
 }
 
@@ -46,10 +46,6 @@ message MessageResponse{
 message GetMessageRequest{
     string id = 1;
     string topic = 2;
-}
-
-message GetMessageResponse{
-    repeated Message messages = 1;
 }
 
 message GetTopicRequest{
