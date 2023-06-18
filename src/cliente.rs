@@ -3,7 +3,9 @@ use std::sync::Arc;
 use std::time::Duration;
 use std::collections::HashMap;
 use tokio::sync::Mutex;
+use tokio_stream::StreamExt;
 use tonic::{transport::Channel,Request};
+use tokio::signal;
 mod m_broker{
     tonic::include_proto!("message_broker");
 }
@@ -88,7 +90,7 @@ async fn subscribe(mut client:m_broker::broker_client::BrokerClient<Channel>, us
     println!("Topic elegido:{} ", topic_name.clone());
     let request = tonic::Request::new(m_broker::SuscriptionRequest {
         topic: topic_name.trim().to_string(),
-        id: usuario.id.clone(),
+        user: Some(usuario),
     });
     let _response = client.suscribe(request).await?.into_inner();
 
@@ -115,11 +117,11 @@ async fn view(mut client: m_broker::broker_client::BrokerClient<Channel>, usuari
         topic: topic_name.trim().to_string(),
         id: usuario.id.clone(),
     });
-    let response = client.get_messages(request).await?.into_inner();
-
+    let mut stream = client.get_messages(request).await?.into_inner();
+    
     println!("--- Mensajes en el topic ---");
-    for message in response.messages {
-        println!("{}: {}", message.id,message.contenido);
+    while let Some(item) = stream.next().await{
+        println!("{}: {}", item.as_ref().unwrap().id.clone(), item.as_ref().unwrap().contenido.clone());
     }
 
     Ok(())

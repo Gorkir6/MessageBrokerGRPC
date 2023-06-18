@@ -142,8 +142,16 @@ impl m_broker::broker_server::Broker for BrokerTrait{
 
                 }
             };
+            let messages_clone = topic.mensajes.clone();
             current_client.stream = Some(Arc::new(tx));
             tokio::spawn(async move{ 
+
+                for message in messages_clone{
+                    match stream_tx.send(Ok(message)).await{
+                        Ok(_)=>{}
+                        Err(_) => {}
+                    }
+                }            
                 while let Some(msg) = rx.recv().await{
                     match stream_tx.send(msg).await{
                         Ok(_) => {println!("Mensaje enviado correctamente");}
