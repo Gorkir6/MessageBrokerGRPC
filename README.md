@@ -10,7 +10,11 @@
 ```ssh 
     curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
-### Cargo(Incluido en rust)
+### Cargo
+Suele venir en la instalacion de rust, si se tiene un error 
+```ssh
+    sudo apt install cargo 
+```
 ### Para el proto
 ```ssh
     sudo apt install -y protobuf-compiler libprotobuf-dev
