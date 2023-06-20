@@ -1,7 +1,6 @@
 use m_broker::User;
 use futures::Stream;
-use std::rc::Rc;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::sync::mpsc;
@@ -47,7 +46,7 @@ async fn remove_client(&self, topic_name: String, client_id: String) {
     }
 }
 #[tonic::async_trait]
-impl m_broker::broker_server::Broker for BrokerTrait{
+impl m_broker::broker_server::Broker for Arc<BrokerTrait>{
 
     async fn suscribe(
         &self,
@@ -112,7 +111,7 @@ impl m_broker::broker_server::Broker for BrokerTrait{
     type GetMessagesStream  = Pin<Box<dyn Stream<Item = Result<m_broker::Message, Status>> + Send>>;
 
     async fn get_messages(
-        &self,
+        self: &Arc<BrokerTrait>,
         request: Request<m_broker::GetMessageRequest>
     )-> Result<Response<Self::GetMessagesStream>,Status>{
         let request_data = request.into_inner();    
@@ -122,7 +121,7 @@ impl m_broker::broker_server::Broker for BrokerTrait{
             Some(topic) => topic,
             None => return Err(Status::not_found("No existe el topic")),
         };
-        
+        let self_arc = Arc::clone(&self);
             //Se genera el stream de mensajes. 
             //Primero se van a enviar los mensajes que se encuentran guardados en el
             //servidor. 
@@ -157,6 +156,7 @@ impl m_broker::broker_server::Broker for BrokerTrait{
                         Ok(_) => {println!("Mensaje enviado correctamente");}
                         Err(_msg) => {
                             println!("Error enviando el mensaje al cliente");
+                            let _ = &self_arc.remove_client(request_topic.clone(), request_id.clone());
                             break;
                         }
                     }
@@ -252,7 +252,7 @@ async fn main() -> Result<(),Box<dyn std::error::Error>>{
     let addr = "127.0.0.1:50051".parse()?;
     
     println!("Server escuchando en {}", addr);
-    let broker = BrokerTrait {
+    let broker = Arc::new(BrokerTrait {
         topics: Arc::new(Mutex::new({
             let mut topics = HashMap::new();
             topics.insert(
@@ -279,7 +279,7 @@ async fn main() -> Result<(),Box<dyn std::error::Error>>{
             topics
         })),
         users: Arc::new(Mutex::new(HashMap::new())),
-    };
+    });
     tonic::transport::Server::builder().add_service(m_broker::broker_server::BrokerServer::new(broker)).serve(addr).await?;
     Ok(())
 }
