@@ -1,17 +1,12 @@
 use std::io::{self,Write};
-use std::sync::Arc;
-use std::time::Duration;
-use std::collections::HashMap;
-use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
-use tonic::{transport::Channel,Request};
+use tonic::transport::Channel;
 mod m_broker{
     tonic::include_proto!("message_broker");
 }
 
 struct Client{
     pub usuario: m_broker::User,
-    pub topics: HashMap<String,Vec<m_broker::Message>>
 }
 
 #[tokio::main]
@@ -25,13 +20,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         println!("Ingrese su nombre");
         io::stdout().flush()?;
         io::stdin().read_line(&mut cliente_name)?;
+
         println!("Ingese su id: ");
         io::stdout().flush()?;
-        io::stdin().read_line(&mut cliente_id)?;
-        let request = tonic::Request::new(m_broker::RegisterRequest{usuario: Some(m_broker::User{id:cliente_id.clone(), nombre: cliente_name.clone()}),});
+        io::stdin().read_line(&mut cliente_id)?; 
+        let request = tonic::Request::new(m_broker::RegisterRequest {
+            usuario: Some(m_broker::User {
+                id: cliente_id.trim_end().to_string(),
+                nombre: cliente_name.trim_end().to_string(),
+            }),
+        });        
         match client.register(request).await {
             Ok(response) => {
-                println!("User registration successful: {:?}", response);
+                let mut stream = response.into_inner();
+                tokio::spawn(async move{
+                    while let Some(_item) = stream.next().await{
+                        
+                    }
+                });
                 break;
             }
             Err(error) => {
@@ -43,7 +49,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let user = m_broker::User{id:cliente_id.clone(),nombre:cliente_name.clone(),};
     let cliente_actual = Client{
         usuario: user,
-        topics: HashMap::new(),
     };
     // Bucle principal del cliente
     loop {
@@ -77,81 +82,155 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn subscribe(mut client:m_broker::broker_client::BrokerClient<Channel>, usuario: m_broker::User) -> Result<(), Box<dyn std::error::Error>> {
     let request = tonic::Request::new(m_broker::GetAllTopicRequest{id: usuario.id.clone(),});
     let response = client.get_all_topics(request).await?.into_inner();
+    let mut selected_topic = String::new();
     println!("--- Topics disponibles ---");
-    for topic in response.topics {
-        println!("{}", topic);
+    for (index,topic) in response.topics.iter().enumerate() {
+        println!("{}: {}",index+1, topic);
     }
-
-    println!("Ingrese el nombre del topic al que desea suscribirse:");
-    let mut topic_name = String::new();
-    io::stdout().flush()?;
-    io::stdin().read_line(&mut topic_name)?;
-    println!("Topic elegido:{} ", topic_name.clone());
-    let request = tonic::Request::new(m_broker::SuscriptionRequest {
-        topic: topic_name.trim().to_string(),
+    loop{
+        println!("Seleccione el topic:");
+        let mut topic_name = String::new();
+        io::stdout().flush()?;
+        io::stdin().read_line(&mut topic_name)?;
+        match topic_name.trim().parse::<usize>(){
+            Ok(i)=>{
+                let topic_i = i-1;
+                if topic_i < response.topics.len(){
+                    selected_topic = response.topics[topic_i].clone();
+                    println!("Topic elegido: {}",selected_topic.clone());
+                    break;
+                }else{
+                    println!("Seleccione una opcion valida");
+                }
+            }
+            Err(_) => {println!("Error de tipo");}
+        }
+    }    
+    let request = tonic::Request::new(m_broker::SubscriptionRequest {
+        topic: selected_topic.trim().to_string(),
         user: Some(usuario),
     });
-    let _response = client.suscribe(request).await?.into_inner();
-
-    println!("Suscripción exitosa");
-
+    match client.subscribe(request).await{
+        Ok(_response) => {
+            println!("Suscripción exitosa");
+        }
+        Err(error) => {
+            println!("Error: {}",error.message());
+        }
+    }
     Ok(())
 }
 
 async fn view(mut client: m_broker::broker_client::BrokerClient<Channel>, usuario: m_broker::User) -> Result<(), Box<dyn std::error::Error>> {
     let request = tonic::Request::new(m_broker::GetTopicRequest {id: usuario.id.clone(),});
     let response = client.get_topics(request).await?.into_inner();
-
-    println!("--- Topics suscritos ---");
-    for topic in response.topics {
-        println!("{}", topic);
+    if response.topics.is_empty(){
+        println!("No se encuentra suscrito a ningun topic");
+        return Ok(());
     }
-
-    println!("Ingrese el nombre del topic que desea ver:");
-    let mut topic_name = String::new();
-    io::stdout().flush()?;
-    io::stdin().read_line(&mut topic_name)?;
-
+    let mut selected_topic = String::new();//recomendable usar Option.
+    println!("--- Topics suscritos ---");
+    for (index,topic) in response.topics.iter().enumerate() {
+        println!("{}: {}",index+1, topic);
+    }
+    loop{
+        println!("Seleccione el topic que desea ver:");
+        let mut topic_name = String::new();
+        io::stdout().flush()?;
+        io::stdin().read_line(&mut topic_name)?;
+        match topic_name.trim().parse::<usize>(){
+            Ok(i)=>{
+                let topic_i = i-1;
+                if topic_i < response.topics.len(){
+                    selected_topic = response.topics[topic_i].clone();
+                    println!("Topic elegido: {}",selected_topic.clone());
+                    break;
+                }else{
+                    println!("Seleccione una opcion valida");
+                }
+            }
+            Err(_) => {println!("Error de tipo");}
+        }
+    }
     let request = tonic::Request::new(m_broker::GetMessageRequest {
-        topic: topic_name.trim().to_string(),
+        topic: selected_topic.trim().to_string(),
         id: usuario.id.clone(),
     });
-    let mut stream = client.get_messages(request).await?.into_inner();
-    
-    println!("--- Mensajes en el topic ---");
-    while let Some(item) = stream.next().await{
-        println!("{}: {}", item.as_ref().unwrap().id.clone(), item.as_ref().unwrap().contenido.clone());
+    match client.get_messages(request).await{
+        Ok(response)=>{
+            let mut stream = response.into_inner();
+            println!("---Mensajes en el topic ---");
+            println!("Presion ctrl+c para salir");
+            loop{
+                tokio::select! {
+                    item = stream.next() => {
+                        if let Some(item) = item {
+                            println!("{}: {}", item.as_ref().unwrap().id.clone().trim().to_string(), item.as_ref().unwrap().contenido.clone());
+                        }
+                    }
+                    _ = tokio::signal::ctrl_c() => break,
+                }
+            }
+        }
+        Err(error) => {
+            println!("Erro: {}",error.message());
+        }
     }
-
+  
     Ok(())
 }
 
 async fn post(mut client: m_broker::broker_client::BrokerClient<Channel>, usuario: m_broker::User) -> Result<(), Box<dyn std::error::Error>> {
     let request = tonic::Request::new(m_broker::GetTopicRequest {id: usuario.id.clone()});
     let response = client.get_topics(request).await?.into_inner();
-
-    println!("--- Topics suscritos ---");
-    for topic in response.topics {
-        println!("{}", topic);
+    if response.topics.is_empty(){
+        println!("No se encuentra suscrito a ningun topic");
+        return Ok(());
     }
-
-    println!("Ingrese el nombre del topic en el que desea publicar:");
-    let mut topic_name = String::new();
-    io::stdout().flush()?;
-    io::stdin().read_line(&mut topic_name)?;
-
-    println!("Ingrese el mensaje:");
+    let mut selected_topic = String::new();
+    println!("--- Topics suscritos ---");
+    for (index,topic) in response.topics.iter().enumerate() {
+        println!("{}: {}",index+1, topic);
+    }
+    loop{
+        println!("Seleccione el topic:");
+        let mut topic_name = String::new();
+        io::stdout().flush()?;
+        io::stdin().read_line(&mut topic_name)?;
+        match topic_name.trim().parse::<usize>(){
+            Ok(i)=>{
+                let topic_i = i-1;
+                if topic_i < response.topics.len(){
+                    selected_topic = response.topics[topic_i].clone();
+                    println!("Topic elegido: {}",selected_topic.clone());
+                    break;
+                }else{
+                    println!("Seleccione una opcion valida");
+                }
+            }
+            Err(_) => {println!("Error de tipo");}
+        }
+    }
     let mut message = String::new();
-    io::stdout().flush()?;
-    io::stdin().read_line(&mut message)?;
-
+    loop{
+        println!("Ingrese el mensaje:");
+        io::stdout().flush()?;
+        io::stdin().read_line(&mut message)?;
+        if !message.trim().to_string().is_empty(){
+            break;
+        }
+    }
     let request = tonic::Request::new(m_broker::MessageRequest {
-        topic: topic_name.trim().to_string(),
-        mensaje: Some(m_broker::Message{id: usuario.id.clone(),contenido:message.clone()}),
+        topic: selected_topic.trim().to_string(),
+        mensaje: Some(m_broker::Message{id: usuario.id.clone(),contenido:message.clone().trim().to_string()}),
     });
-    let _response = client.post_message(request).await?.into_inner();
-
-    println!("Mensaje publicado");
-
+    match client.post_message(request).await{
+        Ok(_response) => {
+            println!("Mensaje publicado!");
+        }
+        Err(error) =>{
+            println!("Error: {}", error.message());
+        }
+    }
     Ok(())
 }

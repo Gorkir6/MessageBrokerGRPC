@@ -1,4 +1,8 @@
-use m_broker::User;
+use tokio::time::sleep;
+use chrono::{DateTime,Local};
+use std::fs::File;
+use std::io::{self,Write};
+use std::time::Duration;
 use futures::Stream;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -29,29 +33,92 @@ impl Default for Topic{
         }
     }
 }
+
+struct Log {
+    file: File,
+}
+
+impl Default for Log {
+    fn default() -> Self {
+        let file = match File::create("logs.txt") {
+            Ok(file) => file,
+            Err(err) => {
+                eprintln!("Error creating file: {}", err);
+                File::open("logs.txt").expect("Failed to open file")
+            }
+        };
+
+        Self {
+            file,
+        }
+    }
+}
+
 //Implementacion del server.
 //
 #[derive(Default)]
 struct BrokerTrait{
     topics: Arc<Mutex<HashMap<String,Topic>>>,
-    users: Arc<Mutex<HashMap<String,User>>>
+    users: Arc<Mutex<HashMap<String,m_broker::User>>>,
+    log: Arc<std::sync::Mutex<Log>>,
 }
 
 impl BrokerTrait{
-async fn remove_client(&self, topic_name: String, client_id: String) {
+    async fn remove_client_from_topic(&self, topic_name: String, client_id: String) {
         let mut topics = self.topics.lock().await;
+        println!("Entra a remove cliente");
         if let Some(topic) = topics.get_mut(&topic_name) {
-            topic.suscriptores.remove(&client_id);
+            match topic.suscriptores.get_mut(&client_id){
+                Some(cl) => {
+                    cl.conectado = false;
+                    cl.stream = None;
+                }
+                None => {println!("El usuario no existe");}
+                
+            }
         }
     }
+
+    async fn client_disconnected(&self,client_id: String){
+        let mut users = self.users.lock().await;
+        if users.contains_key(&client_id){
+            users.remove(&client_id);
+        }
+        let mut topics = self.topics.lock().await;
+        for (_,topic) in topics.iter_mut(){
+            if topic.suscriptores.contains_key(&client_id){
+                topic.suscriptores.remove(&client_id);
+            }
+        }
+        let date = Local::now();
+        self.write_on_log(format!("{}: Cliente desconectado\n",date)).await;
+    }
+
+   
+    async fn write_on_log(&self, data: String) {
+        let log = Arc::clone(&self.log);
+        let _ = log.lock();
+        let result = tokio::task::spawn_blocking(move || {
+            let mut log = log.lock().unwrap();
+            log.file.write_all(data.as_bytes())?;
+            Ok::<(), io::Error>(())
+        })
+        .await;
+
+        if let Err(err) = result {
+            eprintln!("Error writing to log: {}", err);
+        }
+    }
+
 }
 #[tonic::async_trait]
 impl m_broker::broker_server::Broker for Arc<BrokerTrait>{
 
-    async fn suscribe(
+
+    async fn subscribe(
         &self,
-        request: Request<m_broker::SuscriptionRequest>,
-    )-> Result<Response<m_broker::SuscriptionResponse>, Status>{
+        request: Request<m_broker::SubscriptionRequest>,
+    )-> Result<Response<m_broker::SubscriptionResponse>, Status>{
         let request_data = request.into_inner();
         let (request_user, request_topic) = (request_data.user.unwrap(),request_data.topic.clone());
         let mut topics = self.topics.lock().await;
@@ -63,48 +130,61 @@ impl m_broker::broker_server::Broker for Arc<BrokerTrait>{
                 conectado: false,
                 stream: None,
             };
-            match topic.suscriptores.insert(request_user.id.clone(),cliente){
+            match topic.suscriptores.insert(request_user.id.clone().trim().to_string(),cliente){
                 Some(_c) => {
                     return Err(Status::already_exists("El usuario se encuentra ya suscrito al topic"));
                 }
                 None => {
-                    
+                    let date = Local::now();
+                    self.write_on_log(format!("{}: Cliente {} se suscribio al topic {}\n",date,request_user.id.clone().trim().to_string(),request_topic.clone())).await;
                 }
             }
         }else{
             println!("DEBUG: Topic not found: {}", request_topic); 
             return Err(Status::invalid_argument("No existe el topic"));
         } 
-        let response = m_broker::SuscriptionResponse{
+        let response = m_broker::SubscriptionResponse{
             success: true
         };
         Ok(Response::new(response))
         
     }
 
-    
+    type RegisterStream  = Pin<Box<dyn Stream<Item = Result<m_broker::RegisterResponse, Status>> + Send>>;    
     async fn register(
-        &self,
+        self: &Arc<BrokerTrait>,
         request: Request<m_broker::RegisterRequest>,
-    ) -> Result<Response<m_broker::RegisterResponse>, Status> {
+    ) -> Result<Response<Self::RegisterStream>, Status> {
         let usuario = match request.into_inner().usuario.clone() {
             Some(usuario) => usuario,
-            None => return Err(Status::invalid_argument("User information is missing")),
+            None => return Err(Status::invalid_argument("Datos incompletos")),
         };
 
         let mut users = self.users.lock().await;
 
         if users.contains_key(&usuario.id) {
-            return Err(Status::already_exists("User already exists"));
+            return Err(Status::already_exists("Usuario existente"));
         }
-
-        users.insert(usuario.id.clone(),usuario);
-
-        let response = m_broker::RegisterResponse {
-            success: true,
-        };
-
-        Ok(Response::new(response))
+        let self_arc = Arc::clone(&self);
+        let (stream_tx, stream_rx) = mpsc::channel(1);
+        users.insert(usuario.id.clone(),usuario.clone());
+        tokio::spawn(async move{
+             loop{
+                    match stream_tx.send(Ok(m_broker::RegisterResponse{})).await{
+                        Ok(_) => {}
+                        Err(_msg) => {
+                            let _ = &self_arc.client_disconnected(usuario.id.clone()).await;
+                            break;
+                        }
+                    }
+                    sleep(Duration::from_secs(2)).await;
+                }
+        });
+        let date = Local::now();
+        self.write_on_log(format!("{}: Cliente conectado\n",date)).await;
+        let output_stream = ReceiverStream::new(stream_rx);
+        Ok(Response::new(Box::pin(output_stream) as Self::RegisterStream))
+ 
     }
 
     
@@ -131,7 +211,7 @@ impl m_broker::broker_server::Broker for Arc<BrokerTrait>{
             //Esto funciona de la siguiente forma 
             let (stream_tx, stream_rx) = mpsc::channel(128);
             let (tx,mut rx) = mpsc::channel::<Result<m_broker::Message, Status>>(128);
-            let current_client = match topic.suscriptores.get_mut(&request_id){
+            let current_client = match topic.suscriptores.get_mut(&request_id.trim().to_string()){
                 Some(c) => {
                     c
                 }
@@ -143,6 +223,7 @@ impl m_broker::broker_server::Broker for Arc<BrokerTrait>{
             };
             let messages_clone = topic.mensajes.clone();
             current_client.stream = Some(Arc::new(tx));
+            current_client.conectado = true;
             tokio::spawn(async move{ 
 
                 for message in messages_clone{
@@ -156,7 +237,7 @@ impl m_broker::broker_server::Broker for Arc<BrokerTrait>{
                         Ok(_) => {println!("Mensaje enviado correctamente");}
                         Err(_msg) => {
                             println!("Error enviando el mensaje al cliente");
-                            let _ = &self_arc.remove_client(request_topic.clone(), request_id.clone());
+                            let _ = &self_arc.remove_client_from_topic(request_topic.clone(), request_id.clone()).await;
                             break;
                         }
                     }
@@ -191,7 +272,7 @@ impl m_broker::broker_server::Broker for Arc<BrokerTrait>{
     ) -> Result<Response<m_broker::GetTopicResponse>,Status>{
         let topics = self.topics.lock().await;
         let request_topic  = request.into_inner();
-        let user_id = request_topic.id;
+        let user_id = request_topic.id.trim().to_string();
         let mut response_topics = vec![];
         for (topic_name,topic) in topics.iter(){
             if topic.suscriptores.contains_key(&user_id){
@@ -215,22 +296,26 @@ impl m_broker::broker_server::Broker for Arc<BrokerTrait>{
         //Ver si si existe el topic y si si esta suscrito el usuario.
         match topics.get_mut(&request_topic){
             Some(topic)=>{
-                if topic.suscriptores.contains_key(&request_mensaje.id){
+                if topic.suscriptores.contains_key(&request_mensaje.id.trim().to_string()){
                     //Si esta suscrito
                     topic.mensajes.push(request_mensaje.clone());
+                    let date = Local::now();
+                    self.write_on_log(format!("{}: Mensaje enviado al topic {}\n",date,request_topic.clone())).await;
                     //Se envia el mensaje a todos los clientes que se encuentren viendo el topic.
                     //Utilizando el stream.
                     for (_,sub) in &topic.suscriptores{
-                        match &sub.stream{
-                            Some(sub) => {
-                                match sub.send(Ok(request_mensaje.clone())).await{
-                                    Ok(_) => {}
-                                    Err(_) => {}
+                        if sub.conectado{
+                            match &sub.stream{
+                                Some(sub) => {
+                                    match sub.send(Ok(request_mensaje.clone())).await{
+                                        Ok(_) => {}
+                                        Err(_) => {}
+                                    }
                                 }
-                            }
-                            None => { println!("No hay");
-                            }
-                         }; 
+                                None => { println!("No hay");
+                                }
+                            };
+                        }                        
                     }
                     let response = m_broker::MessageResponse{
                         success: true
@@ -279,6 +364,7 @@ async fn main() -> Result<(),Box<dyn std::error::Error>>{
             topics
         })),
         users: Arc::new(Mutex::new(HashMap::new())),
+        log: Arc::new(std::sync::Mutex::new(Log::default())),
     });
     tonic::transport::Server::builder().add_service(m_broker::broker_server::BrokerServer::new(broker)).serve(addr).await?;
     Ok(())

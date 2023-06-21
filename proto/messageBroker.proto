@@ -3,14 +3,17 @@ package messageBroker;
 import "google/protobuf/empty.proto";
 
 service Broker {
-  rpc Suscribe(SuscriptionRequest) returns (SuscriptionResponse);
+  rpc Subscribe(SubscriptionRequest) returns (SubscriptionResponse);
   rpc PostMessage(MessageRequest) returns (MessageResponse);
   rpc GetTopics(GetTopicRequest) returns (GetTopicResponse);
   rpc GetAllTopics(GetAllTopicRequest) returns (GetTopicResponse);
   rpc GetMessages(GetMessageRequest) returns(stream Message);
-  rpc Register(RegisterRequest) returns(RegisterResponse); 
+  rpc Register(RegisterRequest) returns(stream RegisterResponse);
 }
 
+message Beat{
+    
+  }
 
 message User{
     string id = 1;
@@ -22,7 +25,7 @@ message RegisterRequest{
 }
 
 message RegisterResponse{
-    bool success = 1;
+
 }
 
 message Message{
@@ -30,7 +33,7 @@ message Message{
     string contenido = 2;
 }
 
-message SuscriptionRequest{
+message SubscriptionRequest{
     User user = 1;
     string topic = 2;
 }
@@ -59,6 +62,6 @@ message GetAllTopicRequest{
   string id = 1;
 }
 
-message SuscriptionResponse{
+message SubscriptionResponse{
     bool success = 1;
   }
