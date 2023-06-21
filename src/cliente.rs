@@ -17,10 +17,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut cliente_name = String::new();
     let mut cliente_id = String::new();
     loop{
+        cliente_id = "".to_string();
+        cliente_name = "".to_string();
         println!("Ingrese su nombre");
         io::stdout().flush()?;
-        io::stdin().read_line(&mut cliente_name)?;
-
+        io::stdin().read_line(&mut cliente_name)?; 
         println!("Ingese su id: ");
         io::stdout().flush()?;
         io::stdin().read_line(&mut cliente_id)?; 

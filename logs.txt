@@ -1,21 +1,9 @@
-2023-06-21 09:05:36.523213200 -04:00: Cliente conectado
-2023-06-21 09:05:44.649436766 -04:00: Cliente conectado
-2023-06-21 09:05:50.551191646 -04:00: Cliente 123
-ewqe se suscribio al topic Memes
-2023-06-21 09:05:53.514424067 -04:00: Cliente 123 se suscribio al topic Memes
-2023-06-21 09:06:13.932974747 -04:00: Mensaje enviado al topic Memes
-2023-06-21 09:08:24.775917707 -04:00: Cliente desconectado
-2023-06-21 09:08:26.650894167 -04:00: Cliente desconectado
-2023-06-21 09:14:48.586477740 -04:00: Cliente conectado
-2023-06-21 09:14:53.070055613 -04:00: Cliente 123 se suscribio al topic Pc
-2023-06-21 09:14:56.469404916 -04:00: Mensaje enviado al topic Pc
-2023-06-21 09:15:22.614885812 -04:00: Cliente desconectado
-2023-06-21 09:16:32.449538670 -04:00: Cliente conectado
-2023-06-21 09:16:40.506898519 -04:00: Cliente 123 se suscribio al topic Memes
-2023-06-21 09:16:47.748003182 -04:00: Mensaje enviado al topic Memes
-2023-06-21 09:18:09.540133856 -04:00: Mensaje enviado al topic Memes
-2023-06-21 09:18:36.535455275 -04:00: Cliente desconectado
-2023-06-21 09:18:45.418939295 -04:00: Cliente conectado
-2023-06-21 09:18:48.045090672 -04:00: Cliente 123 se suscribio al topic Memes
-2023-06-21 09:18:58.813374517 -04:00: Mensaje enviado al topic Memes
-2023-06-21 09:19:07.435475272 -04:00: Cliente desconectado
+2023-06-21 09:39:00.523563848 -04:00: Cliente conectado
+2023-06-21 09:39:02.524851576 -04:00: Cliente desconectado
+2023-06-21 09:39:08.802558282 -04:00: Cliente conectado
+2023-06-21 09:39:29.745314284 -04:00: Cliente conectado
+2023-06-21 09:39:34.297967138 -04:00: Cliente que se suscribio al topic Pc
+2023-06-21 09:39:40.888228353 -04:00: Mensaje enviado al topic Pc
+2023-06-21 09:39:44.366788031 -04:00: Cliente 123 se suscribio al topic Pc
+2023-06-21 09:39:56.840990756 -04:00: Cliente desconectado
+2023-06-21 09:39:59.770139396 -04:00: Cliente desconectado

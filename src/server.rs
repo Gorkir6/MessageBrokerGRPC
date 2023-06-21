@@ -159,7 +159,9 @@ impl m_broker::broker_server::Broker for Arc<BrokerTrait>{
             Some(usuario) => usuario,
             None => return Err(Status::invalid_argument("Datos incompletos")),
         };
-
+        if usuario.id.trim().to_string().is_empty()||usuario.nombre.trim().to_string().is_empty(){
+            return Err(Status::invalid_argument("No puede ser vacio"));
+        }
         let mut users = self.users.lock().await;
 
         if users.contains_key(&usuario.id) {
